@@ -33,14 +33,15 @@ class VonMisesFisher(torch.distributions.Distribution):
     def stddev(self):
         return self.scale
 
-    def __init__(self, loc, scale, validate_args=None, k=1):
+    def __init__(self, loc, scale, validate_args=False, k=1, radius=1):
         self.dtype = loc.dtype
         self.loc = loc
         self.scale = torch.ones_like(scale) * k
         self.device = loc.device
         self.__m = loc.shape[-1]
-        self.__e1 = (torch.Tensor([1.0] + [0] * (loc.shape[-1] - 1))).to(self.device)
+        self.__e1 = (torch.Tensor([radius] + [0] * (loc.shape[-1] - 1))).to(self.device)
         self.k = k
+        self.radius = radius
 
         super().__init__(self.loc.size(), validate_args=validate_args)
 
@@ -63,7 +64,7 @@ class VonMisesFisher(torch.distributions.Distribution):
             .to(self.device)
             .transpose(0, -1)[1:]
         ).transpose(0, -1)
-        v = v / v.norm(dim=-1, keepdim=True)
+        v = self.radius * v / v.norm(dim=-1, keepdim=True)
 
         w_ = torch.sqrt(torch.clamp(1 - (w ** 2), 1e-10))
         x = torch.cat((w, w_ * v), -1)
@@ -169,7 +170,7 @@ class VonMisesFisher(torch.distributions.Distribution):
 
     def __householder_rotation(self, x):
         u = self.__e1 - self.loc
-        u = u / (u.norm(dim=-1, keepdim=True) + 1e-5)
+        u = self.radius * u / (u.norm(dim=-1, keepdim=True) + 1e-5)
         z = x - 2 * (x * u).sum(-1, keepdim=True) * u
         return z
 

@@ -10,11 +10,13 @@ import cv2
 
 
 class CustomDataset(Dataset):
-    def __init__(self, images, labels, input_size, transform=None):
+    def __init__(self, images, labels, input_size, base_transform, aug_transform, augment=False):
         self.images = images
         self.labels = labels
-        self.transform = transform
+        self.base_transform = base_transform
+        self.aug_transform = aug_transform
         self.input_size = input_size
+        self.augment = augment
 
     def __len__(self):
         return len(self.images)
@@ -30,12 +32,22 @@ class CustomDataset(Dataset):
         else: 
             raise NotImplemented
         # imread grayscale picture as array, PIL Image turn it into image
-        if self.transform:
-            img = self.transform(img)
 
-        label = torch.tensor(self.labels[idx]).type(torch.long)
+        if self.augment:
+            base_img = self.base_transform(img)
+            aug_img = self.aug_transform(img)
+            label = torch.tensor(self.labels[idx]).type(torch.long)
 
-        return img, label
+            return base_img, aug_img, label
+
+        elif not self.augment:
+            base_img = self.base_transform(img)
+            label = torch.tensor(self.labels[idx]).type(torch.long)
+
+            return base_img, label
+
+        else:
+            raise NotImplemented
 
 
 def read_label(filepath):
@@ -76,39 +88,35 @@ def get_dataloaders(path='./data/cafe/balance_all', bs=64, augment=False, input_
 
     filenames, labels = load_data(path)
 
-    test_transform = transforms.Compose([
-        # transforms.Grayscale(),
-        # transforms.FiveCrop(40),
-        # transforms.Lambda(lambda crops: torch.stack(
-        #     [transforms.ToTensor()(crop) for crop in crops])),
+    base_transform = transforms.Compose([
         transforms.ToTensor(),
-        # transforms.Lambda(lambda tensors: torch.stack(
-        #     [transforms.Normalize(mean=(mu,), std=(st,))(t) for t in tensors])),
         transforms.Normalize(mean=(0,), std=(1,))
     ])
 
     if augment:
-        train_transform = transforms.Compose([
-            transforms.Grayscale(),
-            transforms.RandomResizedCrop(48, scale=(0.8, 1.2)),
+        aug_transform = transforms.Compose([
+            # transforms.Grayscale(),
+            # transforms.RandomResizedCrop((75, 55), scale=(0.8, 1.2)),
             transforms.RandomApply([transforms.ColorJitter(
                 brightness=0.5, contrast=0.5, saturation=0.5)], p=0.5),
-            transforms.RandomApply(
-                [transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
+            # transforms.RandomApply(
+            #     [transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
             transforms.RandomHorizontalFlip(),
-            transforms.RandomApply([transforms.RandomRotation(10)], p=0.5),
-            transforms.FiveCrop(40),
-            transforms.Lambda(lambda crops: torch.stack(
-                [transforms.ToTensor()(crop) for crop in crops])),
-            transforms.Lambda(lambda tensors: torch.stack(
-                [transforms.Normalize(mean=(mu,), std=(st,))(t) for t in tensors])),
-            transforms.Lambda(lambda tensors: torch.stack(
-                [transforms.RandomErasing()(t) for t in tensors])),
+            transforms.RandomApply([transforms.RandomRotation(15)], p=0.5),
+            # transforms.FiveCrop((64, 40)),
+            # transforms.Lambda(lambda crops: torch.stack(
+            #     [transforms.ToTensor()(crop) for crop in crops])),
+            # transforms.Lambda(lambda tensors: torch.stack(
+            #     [transforms.Normalize(mean=(0,), std=(1,))(t) for t in tensors])),
+            # transforms.Lambda(lambda tensors: torch.stack(
+            #     [transforms.RandomErasing()(t) for t in tensors])),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0,), std=(1,))
         ])
     else:
-        train_transform = test_transform
+        aug_transform = base_transform
 
-    dataset = CustomDataset(filenames, labels, input_size, train_transform)
+    dataset = CustomDataset(filenames, labels, input_size, base_transform, aug_transform, augment)
     dataloader = DataLoader(dataset, batch_size=bs, shuffle=True, num_workers=2)
     # use multi-thread to load the dataset
 

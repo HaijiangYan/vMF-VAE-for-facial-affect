@@ -20,11 +20,12 @@ class HypersphericalUniform(torch.distributions.Distribution):
     def device(self, val):
         self._device = val if isinstance(val, torch.device) else torch.device(val)
 
-    def __init__(self, dim, validate_args=None, device="cpu"):
+    def __init__(self, dim, validate_args=False, radius=1, device="cpu"):
         super(HypersphericalUniform, self).__init__(
             torch.Size([dim]), validate_args=validate_args
         )
         self._dim = dim
+        self.radius = radius
         self.device = device
 
     def sample(self, shape=torch.Size()):
@@ -39,7 +40,7 @@ class HypersphericalUniform(torch.distributions.Distribution):
             .to(self.device)
         )
 
-        return output / output.norm(dim=-1, keepdim=True)
+        return self.radius * output / output.norm(dim=-1, keepdim=True)
 
     def entropy(self):
         return self.__log_surface_area()
