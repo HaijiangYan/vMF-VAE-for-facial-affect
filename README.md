@@ -52,4 +52,5 @@ k=3000 <img src="./pic/sampling_k=3000.png" width = "30%" style="display: flex" 
 <img src="./pic/manifold_k300_e50.png" width = "80%" /> 
 
 * It also shows some good property like, similar area covered by different clusters and ambiguous facial affect in the gap between two clusters. 
+* And also, a finite, closed latent space won't generate a face that looks crazy or even like anything but a face. From this standpoint, it aligns well with real representations in human's cognition, better than plane latent space. 
 

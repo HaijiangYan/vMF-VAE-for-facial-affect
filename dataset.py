@@ -10,9 +10,10 @@ import cv2
 
 
 class CustomDataset(Dataset):
-    def __init__(self, images, labels, input_size, base_transform, aug_transform, augment=False):
+    def __init__(self, images, labels, labels_identity, input_size, base_transform, aug_transform, augment=False):
         self.images = images
         self.labels = labels
+        self.labels_identity = labels_identity
         self.base_transform = base_transform
         self.aug_transform = aug_transform
         self.input_size = input_size
@@ -37,14 +38,16 @@ class CustomDataset(Dataset):
             base_img = self.base_transform(img)
             aug_img = self.aug_transform(img)
             label = torch.tensor(self.labels[idx]).type(torch.long)
+            label_identity = torch.tensor(self.labels_identity[idx]).type(torch.long)
 
-            return base_img, aug_img, label
+            return base_img, aug_img, label, label_identity
 
         elif not self.augment:
             base_img = self.base_transform(img)
             label = torch.tensor(self.labels[idx]).type(torch.long)
+            label_identity = torch.tensor(self.labels_identity[idx]).type(torch.long)
 
-            return base_img, label
+            return base_img, label, label_identity
 
         else:
             raise NotImplemented
@@ -73,9 +76,10 @@ def load_data(path):
     # sorted by their order to match the label's order
 
     labels = read_label(os.path.join(path, 'label.csv'))
+    labels_identity = read_label(os.path.join(path, 'label_identity.csv'))
     # read labels from the csv where labels have already been ordered.
 
-    return filenames, labels
+    return filenames, labels, labels_identity
 
 
 def get_dataloaders(path='./data/cafe/balance_all', bs=64, augment=False, input_size=(64, 40)):
@@ -86,7 +90,7 @@ def get_dataloaders(path='./data/cafe/balance_all', bs=64, augment=False, input_
         input: path to ft_dataset file
         output: Dataloaders """
 
-    filenames, labels = load_data(path)
+    filenames, labels, labels_identity = load_data(path)
 
     base_transform = transforms.Compose([
         transforms.ToTensor(),
@@ -101,8 +105,8 @@ def get_dataloaders(path='./data/cafe/balance_all', bs=64, augment=False, input_
                 brightness=0.5, contrast=0.5, saturation=0.5)], p=0.5),
             # transforms.RandomApply(
             #     [transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomApply([transforms.RandomRotation(15)], p=0.5),
+            # transforms.RandomHorizontalFlip(),
+            # transforms.RandomApply([transforms.RandomRotation(15)], p=0.5),
             # transforms.FiveCrop((64, 40)),
             # transforms.Lambda(lambda crops: torch.stack(
             #     [transforms.ToTensor()(crop) for crop in crops])),
@@ -116,7 +120,7 @@ def get_dataloaders(path='./data/cafe/balance_all', bs=64, augment=False, input_
     else:
         aug_transform = base_transform
 
-    dataset = CustomDataset(filenames, labels, input_size, base_transform, aug_transform, augment)
+    dataset = CustomDataset(filenames, labels, labels_identity, input_size, base_transform, aug_transform, augment)
     dataloader = DataLoader(dataset, batch_size=bs, shuffle=True, num_workers=2)
     # use multi-thread to load the dataset
 

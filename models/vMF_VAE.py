@@ -116,7 +116,6 @@ class VAE(torch.nn.Module):
         x = self.softmax_class(x)
 
         return x
-
         
     def decoder(self, z):
         
@@ -127,6 +126,7 @@ class VAE(torch.nn.Module):
         x = F.relu(self.Tcov_de2(x))
         x = F.relu(self.Tcov_de3(x))
         x = F.sigmoid(self.Tcov_de4(x))
+        # x = self.Tcov_de4(x)
         
         return x
         

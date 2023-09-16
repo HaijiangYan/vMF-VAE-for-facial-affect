@@ -3,7 +3,7 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from math import pi
+from math import pi, atan2, asin, sqrt
 
 
 def setup_seed(seed):
@@ -35,18 +35,24 @@ def latent_space(model, dataloader, config, legend=True, sample="mean"):
             raise NotImplemented
 
         x = torch.cat((x, latent_embeddings), 0) 
-        y = torch.cat((y, data[-1]), 0) 
+        y = torch.cat((y, data[-2]), 0) 
 
     x = x.detach().numpy()[1:, :]
     y = y.detach().numpy()[1:]
 
     if model.z_dim == 3:
-        ax = plt.figure(figsize=(10, 10)).add_subplot(111, projection='3d')
+        fig = plt.figure(figsize=(10, 15))
+        ax = fig.add_subplot(211, projection='3d')
+        ax2 = fig.add_subplot(212)
+
         for key, value in config.label_list.items():
-            ax.scatter(x[np.where(y == int(key)), 0],
-                       x[np.where(y == int(key)), 1],
-                       x[np.where(y == int(key)), 2],
-                       alpha=0.8, label=value)
+            x_, y_, z_ = x[np.where(y == int(key)), 0], x[np.where(y == int(key)), 1], x[np.where(y == int(key)), 2]
+            ax.scatter(x_, y_, z_, label=value)
+
+            x__, y__ = [asin(i) for i in z_[0]], [sqrt(1-i[2]*i[2]) * atan2(i[0], i[1]) 
+            for i in x[np.where(y == int(key)), :][0]]
+            ax2.scatter(y__, x__, label=value)
+            ax2.set_aspect('equal')
 
     elif model.z_dim == 2:
         fig, ax = plt.subplots()
@@ -101,7 +107,7 @@ def manifold_sphere(model, config, theta=(0,), z_resolution=10):
             img = img.cpu().detach().numpy()
 
             for i in range(z_resolution):
-                ax[j][i].imshow(img[i, 0, :, :])
+                ax[j][i].imshow(img[i, 0, :, :],cmap='gray')
 
         fig.subplots_adjust(wspace=0, hspace=0, bottom=0.15, right=0.88)
 
@@ -121,7 +127,7 @@ def manifold_sphere(model, config, theta=(0,), z_resolution=10):
         img = img.cpu().detach().numpy()
 
         for i in range(len(theta)):
-            ax[i].imshow(img[i, 0, :, :])
+            ax[i].imshow(img[i, 0, :, :],cmap='gray')
 
     else: 
         raise NotImplemented
@@ -153,8 +159,8 @@ def reconstruction(model, dataloader, n_show, config):
             plt.setp(a.flat, xticks=[], yticks=[])
 
             for i in range(n_show):
-                a[0][i].imshow(images.cpu().numpy()[i, 0, :, :])
-                a[1][i].imshow(img_rec.cpu().detach().numpy()[i, 0, :, :])
+                a[0][i].imshow(images.cpu().numpy()[i, 0, :, :],cmap='gray')
+                a[1][i].imshow(img_rec.cpu().detach().numpy()[i, 0, :, :],cmap='gray')
 
             f.subplots_adjust(wspace=0, hspace=0, bottom=0.15, right=0.88)
             plt.show()
@@ -218,5 +224,127 @@ class EarlyStopping:
             self.trace_func(f'Validation measure ({self.measure:.6f} --> {measure:.6f}).  Saving model ...')
         torch.save(model, self.path)
         self.measure = measure
+
+
+def identity_test(model, dataloader, config):
+    """to obtain how much the model have learned from the identity information of the faces"""
+    model.eval()
+    latent_code = torch.rand((1, model.z_dim))
+    label_id = torch.rand(1)
+    label_emo = torch.rand(1)
+
+    for data in dataloader:  # calculate the latent codes
+        images = data[0].to(config.device)
+        (embeddings, _), _, z, _ = model(images)
+        embeddings = embeddings.to("cpu")
+
+        latent_code = torch.cat((latent_code, embeddings), 0) 
+        label_emo = torch.cat((label_emo, data[-2]), 0) 
+        label_id = torch.cat((label_id, data[-1]), 0) 
+
+    latent_code = latent_code.detach().numpy()[1:, :]
+    label_emo = label_emo.detach().numpy()[1:]
+    label_id = label_id.detach().numpy()[1:]
+
+    distance_within_p_across_emo = 0
+    distance_between_p_across_emo = 0
+    # within/between subject distance ratio 
+    # for each emo cluster
+    for i in range(7):
+
+        latent_code_sub = latent_code[np.where(label_emo==i), :][0]
+        label_id_sub = label_id[np.where(label_emo==i)]
+
+        distance_within_p = 0
+        ave_position_p = np.ones((1, model.z_dim))
+
+        for j in np.unique(label_id_sub):
+            # for each participant within each emo cluster
+            idx = np.where(label_id_sub==j)
+
+            if len(idx) > 1:
+                distance_self = center_mean_distance(latent_code_sub[idx, :])
+            else:
+                distance_self = 0
+
+            distance_within_p += distance_self
+            mean_position = np.mean(latent_code_sub[idx, :][0], axis=0, keepdims=True)
+            mean_position = mean_position / sqrt(np.sum(mean_position ** 2))
+            ave_position_p = np.concatenate((ave_position_p, mean_position), 0)
+
+        distance_within_p_across_emo += distance_within_p / len(np.unique(label_id_sub))
+        distance_between_p_across_emo += pairwise_mean_distance(ave_position_p[1:, :])
+
+    return distance_within_p_across_emo, distance_between_p_across_emo
+
+
+def center_mean_distance(data):
+    # data should be an array containing a bunch of coordinates
+    dt = 0
+
+    mean_position = np.mean(data, axis=0, keepdims=True)
+    mean_position = mean_position / sqrt(np.sum(mean_position ** 2))
+
+    for i in range(len(data)):
+        d = sqrt(np.sum((data[i, :] - mean_position) ** 2))
+        dt += 2 * np.arcsin(d / 2)
+
+    return dt/len(data)
+
+
+def pairwise_mean_distance(data):
+    # data should be an array containing a bunch of coordinates
+    dt = 0
+
+    for i in range(len(data)-1):
+        for j in range(i, len(data)):
+            d = sqrt(np.sum((data[i, :] - data[j, :]) ** 2))
+            dt += 2 * np.arcsin(d / 2)
+
+    return dt * 2 / (len(data)*(len(data)-1))
+
+
+def collapse_test(model, dataloader, config):
+    """to obtain how much the model have learned from the identity information of the faces"""
+    model.eval()
+    latent_code = torch.rand((1, model.z_dim))
+    label_emo = torch.rand(1)
+
+    for data in dataloader:  # calculate the latent codes
+        images = data[0].to(config.device)
+        (embeddings, _), _, z, _ = model(images)
+        embeddings = embeddings.to("cpu")
+
+        latent_code = torch.cat((latent_code, embeddings), 0) 
+        label_emo = torch.cat((label_emo, data[-2]), 0) 
+
+    latent_code = latent_code.detach().numpy()[1:, :]
+    label_emo = label_emo.detach().numpy()[1:]
+
+    distance_within_emo = 0
+    ave_position_emo = np.ones((1, model.z_dim))
+    # within/between subject distance ratio 
+    # for each emo cluster
+    for i in range(7):
+
+        latent_code_sub = latent_code[np.where(label_emo==i), :][0]
+        distance_in = center_mean_distance(latent_code_sub)
+        distance_within_emo += distance_in / 7
+
+        mean_position = np.mean(latent_code_sub, axis=0, keepdims=True)
+        mean_position = mean_position / sqrt(np.sum(mean_position ** 2))
+        ave_position_emo = np.concatenate((ave_position_emo, mean_position), 0)
+
+    distance_between_emo = pairwise_mean_distance(ave_position_emo[1:, :])
+
+    return distance_between_emo / distance_within_emo
+
+
+
+
+
+
+
+
 
 
