@@ -10,8 +10,9 @@ import cv2
 
 
 class CustomDataset(Dataset):
-    def __init__(self, images, labels, labels_identity, input_size, base_transform, aug_transform, augment=False):
+    def __init__(self, images, images_identity, labels, labels_identity, input_size, base_transform, aug_transform, augment=False):
         self.images = images
+        self.images_identity = images_identity
         self.labels = labels
         self.labels_identity = labels_identity
         self.base_transform = base_transform
@@ -28,8 +29,10 @@ class CustomDataset(Dataset):
             
         if self.input_size == (64, 40):
             img = Image.fromarray(cv2.imread(self.images[idx], 0))
+            img_identity = Image.fromarray(cv2.imread(self.images_identity[idx], 0))
         elif self.input_size == (40, 40):
             img = Image.fromarray(cv2.imread(self.images[idx], 0)[15:-9, :])
+            img_identity = Image.fromarray(cv2.imread(self.images_identity[idx], 0)[15:-9, :])
         else: 
             raise NotImplemented
         # imread grayscale picture as array, PIL Image turn it into image
@@ -44,10 +47,11 @@ class CustomDataset(Dataset):
 
         elif not self.augment:
             base_img = self.base_transform(img)
+            base_img_identity = self.base_transform(img_identity)
             label = torch.tensor(self.labels[idx]).type(torch.long)
             label_identity = torch.tensor(self.labels_identity[idx]).type(torch.long)
 
-            return base_img, label, label_identity
+            return base_img, base_img_identity, label, label_identity
 
         else:
             raise NotImplemented
@@ -74,12 +78,15 @@ def load_data(path):
     			if os.path.splitext(file)[-1] == '.jpg']
     filenames.sort(key=lambda x: int(x.split('/')[-1].split('.')[0]))  
     # sorted by their order to match the label's order
+    filenames_identity = ['./data/cafe/neutral_set' + '/' + file for file in os.listdir(path) 
+                if os.path.splitext(file)[-1] == '.jpg']
+    filenames_identity.sort(key=lambda x: int(x.split('/')[-1].split('.')[0]))  
 
     labels = read_label(os.path.join(path, 'label.csv'))
     labels_identity = read_label(os.path.join(path, 'label_identity.csv'))
     # read labels from the csv where labels have already been ordered.
 
-    return filenames, labels, labels_identity
+    return filenames, filenames_identity, labels, labels_identity
 
 
 def get_dataloaders(path='./data/cafe/balance_all', bs=64, augment=False, input_size=(64, 40)):
@@ -90,7 +97,7 @@ def get_dataloaders(path='./data/cafe/balance_all', bs=64, augment=False, input_
         input: path to ft_dataset file
         output: Dataloaders """
 
-    filenames, labels, labels_identity = load_data(path)
+    filenames, filenames_identity, labels, labels_identity = load_data(path)
 
     base_transform = transforms.Compose([
         transforms.ToTensor(),
@@ -120,7 +127,7 @@ def get_dataloaders(path='./data/cafe/balance_all', bs=64, augment=False, input_
     else:
         aug_transform = base_transform
 
-    dataset = CustomDataset(filenames, labels, labels_identity, input_size, base_transform, aug_transform, augment)
+    dataset = CustomDataset(filenames, filenames_identity, labels, labels_identity, input_size, base_transform, aug_transform, augment)
     dataloader = DataLoader(dataset, batch_size=bs, shuffle=True, num_workers=2)
     # use multi-thread to load the dataset
 

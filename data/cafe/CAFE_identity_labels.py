@@ -7,7 +7,7 @@ p_boundry = [17, 51, 70, 87, 120, 138, 157, 174, 191, 208, 227, 246, 265, 284, 3
 798, 817, 855, 874, 912, 931, 950, 969, 1007, 1026, 1045, 1081, 1100, 1119, 1138, 1176, 1214, 1233, 1252, 1272]  # denotes the number of last image for each people 
 
 
-data_dir = 'data/cafe/balance_all'
+data_dir = 'balance_all'
 suffix = '.jpg'
 order = [os.path.splitext(filename)[0] for filename in os.listdir(data_dir)
          if os.path.splitext(filename)[1] == suffix]

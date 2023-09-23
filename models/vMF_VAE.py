@@ -6,7 +6,7 @@ from hypersphere.distributions import HypersphericalUniform
 
 class VAE(torch.nn.Module):
     
-    def __init__(self, z_dim=3, size=(64, 40), distribution='vmf', kappa=1, radius=1, device="cuda"):
+    def __init__(self, z_dim=3, classify=7, size=(64, 40), distribution='vmf', kappa=1, radius=1, device="cuda"):
         """
         ModelVAE initializer
         :param z_dim: dimension of the latent representation
@@ -80,7 +80,7 @@ class VAE(torch.nn.Module):
         	)
 
         # classifier
-        self.linear = nn.Linear(z_dim, 7)
+        self.linear = nn.Linear(z_dim, classify)
         self.softmax_class = nn.Softmax(dim=1)
 
         # dropout

@@ -14,37 +14,29 @@ def setup_seed(seed):
     torch.backends.cudnn.deterministic = True
 
 
-def latent_space(model, dataloader, config, legend=True, sample="mean"):
+def latent_space(model, dataloader, config, legend=True):
     """display how the latent space clusters different data points in vMF space"""
 
     model.eval()
-    x = torch.rand((1, model.z_dim))
+    x = torch.rand((1, model.z_dim_emo))
     y = torch.rand(1)
 
     for data in dataloader:  # calculate the latent codes
         images = data[0].to(config.device)
-        latent_code, _, z, _ = model(images)
+        x_id = data[3].to(config.device)
+        latent_code, _, _, _ = model(images, x_id)
 
-        # plot with mean values or random samples from posterior distributions
-        if sample == "mean":
-            latent_embeddings, _ = latent_code
-            latent_embeddings = latent_embeddings.to("cpu")
-        elif sample == "random":
-            latent_embeddings = z.to("cpu")
-        else:
-            raise NotImplemented
-
-        x = torch.cat((x, latent_embeddings), 0) 
+        x = torch.cat((x, latent_code[0].to("cpu")), 0) 
         y = torch.cat((y, data[-2]), 0) 
 
     x = x.detach().numpy()[1:, :]
     y = y.detach().numpy()[1:]
 
-    if model.z_dim == 3:
+    if x.shape[1] == 3:
         fig = plt.figure(figsize=(10, 15))
+
         ax = fig.add_subplot(211, projection='3d')
         ax2 = fig.add_subplot(212)
-
         for key, value in config.label_list.items():
             x_, y_, z_ = x[np.where(y == int(key)), 0], x[np.where(y == int(key)), 1], x[np.where(y == int(key)), 2]
             ax.scatter(x_, y_, z_, label=value)
@@ -54,42 +46,40 @@ def latent_space(model, dataloader, config, legend=True, sample="mean"):
             ax2.scatter(y__, x__, label=value)
             ax2.set_aspect('equal')
 
-    elif model.z_dim == 2:
-        fig, ax = plt.subplots()
-        for key, value in config.label_list.items():
-            ax.scatter(x[np.where(y == int(key)), 0],
-                       x[np.where(y == int(key)), 1],
-                       alpha=0.8, label=value)
-    else: 
-        raise NotImplemented
-    print("Number of data points:", len(x))
+        # plt.title("Data Points in Latent Space")
+        if legend == True:
+            ax.legend(fontsize=12)
+        # plt.savefig('./figure/save.jpg')
+        ax.set_xlim(-1 * config.radius, config.radius)
+        ax.set_ylim(-1 * config.radius, config.radius)
 
-    # plt.title("Data Points in Latent Space")
-    if legend == True:
-        ax.legend(fontsize=12)
-    # plt.savefig('./figure/save.jpg')
-    ax.set_xlim(-1 * config.radius, config.radius)
-    ax.set_ylim(-1 * config.radius, config.radius)
+        ax.set_xlabel("X", fontsize=12)
+        ax.set_ylabel("Y", fontsize=12)
 
-    ax.set_xlabel("X", fontsize=12)
-    ax.set_ylabel("Y", fontsize=12)
-
-    if model.z_dim == 3:
         ax.set_zlim(-1 * config.radius, config.radius)
         ax.set_zlabel("Z", fontsize=12)
-    # ax.tick_params(axis='both', which='major', labelsize=15)
+        # ax.tick_params(axis='both', which='major', labelsize=15)
+
+    elif x.shape[1] == 2:
+        fig, ax = plt.subplots()
+        ax.scatter(x[:, 0], x[:, 1], c=y)
+    else: 
+        raise NotImplemented
+
+    print("Number of data:", len(x))
+
     ax.set_aspect('equal')
     plt.show()
 
 
-def manifold_sphere(model, config, theta=(0,), z_resolution=10):
+def manifold_sphere(model, obj, config, theta=(0,), z_resolution=10):
     """
     theta: the arc between intersecting lines - one is (0, 1) on the x-y plane, ranged in 0-2pi;
     z_resolution: how many pics to be shown in a 1/4 arc
     """
     model.eval()
 
-    if model.z_dim == 3:
+    if model.z_dim_id == 3 and model.distribution_id == "vmf" and obj == "id":
         fig, ax = plt.subplots(len(theta), z_resolution)
         plt.setp(ax.flat, xticks=[], yticks=[])
 
@@ -101,6 +91,138 @@ def manifold_sphere(model, config, theta=(0,), z_resolution=10):
                 phi = pi*(-0.5) + (i+1)*pi/z_resolution
                 sample = torch.tensor([[np.sin(arc)*np.cos(phi), np.cos(arc)*np.cos(phi), np.sin(phi)]]) * config.radius
                 grid = torch.cat((grid, sample), 0)
+
+            padding = torch.zeros_like(grid)
+            grid = torch.cat((grid, padding), 1)
+
+            grid = grid[1:, :].type("torch.FloatTensor").to(config.device)
+            img = model.decoder(grid)
+            img = img.cpu().detach().numpy()
+
+            for i in range(z_resolution):
+                ax[j][i].imshow(img[i, 0, :, :],cmap='gray')
+
+        fig.subplots_adjust(wspace=0, hspace=0, bottom=0.15, right=0.88)
+
+    elif model.z_dim_emo == 3 and model.distribution_emo == "vmf" and obj == "emo":
+        fig, ax = plt.subplots(len(theta), z_resolution)
+        plt.setp(ax.flat, xticks=[], yticks=[])
+
+        for j, arc in enumerate(theta):
+            grid = torch.tensor([[0, 0, 0]])
+
+            for i in range(z_resolution):
+
+                phi = pi*(-0.5) + (i+1)*pi/z_resolution
+                sample = torch.tensor([[np.sin(arc)*np.cos(phi), np.cos(arc)*np.cos(phi), np.sin(phi)]]) * config.radius
+                grid = torch.cat((grid, sample), 0)
+
+            padding = torch.zeros_like(grid)
+            grid = torch.cat((padding, grid), 1)
+
+            grid = grid[1:, :].type("torch.FloatTensor").to(config.device)
+            img = model.decoder(grid)
+            img = img.cpu().detach().numpy()
+
+            for i in range(z_resolution):
+                ax[j][i].imshow(img[i, 0, :, :],cmap='gray')
+
+        fig.subplots_adjust(wspace=0, hspace=0, bottom=0.15, right=0.88)
+
+    elif model.z_dim_emo == 3 and model.z_dim_id == 3 and model.distribution_emo == "vmf" and model.distribution_id == "vmf" and obj == "both":
+        fig, ax = plt.subplots(len(theta), z_resolution)
+        plt.setp(ax.flat, xticks=[], yticks=[])
+
+        for j, arc in enumerate(theta):
+            grid = torch.tensor([[0, 0, 0]])
+
+            for i in range(z_resolution):
+
+                phi = pi*(-0.5) + (i+1)*pi/z_resolution
+                sample = torch.tensor([[np.sin(arc)*np.cos(phi), np.cos(arc)*np.cos(phi), np.sin(phi)]]) * config.radius
+                grid = torch.cat((grid, sample), 0)
+
+            grid = torch.cat((grid, grid), 1)
+
+            grid = grid[1:, :].type("torch.FloatTensor").to(config.device)
+            img = model.decoder(grid)
+            img = img.cpu().detach().numpy()
+
+            for i in range(z_resolution):
+                ax[j][i].imshow(img[i, 0, :, :],cmap='gray')
+
+        fig.subplots_adjust(wspace=0, hspace=0, bottom=0.15, right=0.88)
+
+    elif model.z_dim == 2:
+        fig, ax = plt.subplots(1, len(theta))
+        plt.setp(ax.flat, xticks=[], yticks=[])
+
+        grid = torch.tensor([[0, 0]])
+
+        for arc in theta:
+
+            sample = torch.tensor([[np.sin(arc), np.cos(arc)]]) * config.radius
+            grid = torch.cat((grid, sample), 0)
+
+        grid = grid[1:, :].type("torch.FloatTensor").to(config.device)
+        img = model.decoder(grid)
+        img = img.cpu().detach().numpy()
+
+        for i in range(len(theta)):
+            ax[i].imshow(img[i, 0, :, :],cmap='gray')
+
+    else: 
+        raise NotImplemented
+
+    plt.show()
+
+def conditional_manifold(model, obj, condition, config, theta=(0,), z_resolution=10):
+    """
+    theta: the arc between intersecting lines - one is (0, 1) on the x-y plane, ranged in 0-2pi;
+    z_resolution: how many pics to be shown in a 1/4 arc
+    """
+    model.eval()
+
+    if model.z_dim_id == 3 and model.distribution_id == "vmf" and obj == "id":
+        fig, ax = plt.subplots(len(theta), z_resolution)
+        plt.setp(ax.flat, xticks=[], yticks=[])
+
+        for j, arc in enumerate(theta):
+            grid = torch.tensor([[0, 0, 0]])
+
+            for i in range(z_resolution):
+
+                phi = pi*(-0.5) + (i+1)*pi/z_resolution
+                sample = torch.tensor([[np.sin(arc)*np.cos(phi), np.cos(arc)*np.cos(phi), np.sin(phi)]]) * config.radius
+                grid = torch.cat((grid, sample), 0)
+
+            padding = condition.repeat(len(grid), 1)
+            grid = torch.cat((grid, padding), 1)
+
+            grid = grid[1:, :].type("torch.FloatTensor").to(config.device)
+            img = model.decoder(grid)
+            img = img.cpu().detach().numpy()
+
+            for i in range(z_resolution):
+                ax[j][i].imshow(img[i, 0, :, :],cmap='gray')
+
+        fig.subplots_adjust(wspace=0, hspace=0, bottom=0.15, right=0.88)
+
+    elif model.z_dim_emo == 3 and model.distribution_emo == "vmf" and obj == "emo":
+        fig, ax = plt.subplots(len(theta), z_resolution)
+        plt.setp(ax.flat, xticks=[], yticks=[])
+
+        for j, arc in enumerate(theta):
+            grid = torch.tensor([[0, 0, 0]])
+
+            for i in range(z_resolution):
+
+                phi = pi*(-0.5) + (i+1)*pi/z_resolution
+                sample = torch.tensor([[np.sin(arc)*np.cos(phi), np.cos(arc)*np.cos(phi), np.sin(phi)]]) * config.radius
+                grid = torch.cat((grid, sample), 0)
+
+            padding = condition.repeat(len(grid), 1)
+            grid = torch.cat((padding, grid), 1)
 
             grid = grid[1:, :].type("torch.FloatTensor").to(config.device)
             img = model.decoder(grid)
@@ -135,6 +257,23 @@ def manifold_sphere(model, config, theta=(0,), z_resolution=10):
     plt.show()
 
 
+def latent_sample(model, config, n_show=10, std=10):
+
+    # randomly choose a batch to show
+    img_show = torch.normal(0, std, size=(n_show, 3))
+    model.eval()
+
+    img_show = img_show.type("torch.FloatTensor").to(config.device)
+    img = model.decoder(img_show)
+    img = img.cpu().detach().numpy()
+
+    # plt.style.use("dark_background")
+    f, a = plt.subplots(1, n_show)
+    for i in range(n_show):
+        a[i].imshow(img[i, 0, :, :],cmap='gray')
+    plt.show()
+
+
 def reconstruction(model, dataloader, n_show, config):
     # random visualization of the reconstruction
     model.eval()
@@ -152,8 +291,9 @@ def reconstruction(model, dataloader, n_show, config):
                     images = data[1].to(config.device)
             elif not config.aug:
                 images = data[0].to(config.device)
+                x_id = data[3].to(config.device)
 
-            _, _, _, (img_rec, _) = model(images)
+            _, _, _, (img_rec, _) = model(images, x_id)
 
             f, a = plt.subplots(2, n_show)
             plt.setp(a.flat, xticks=[], yticks=[])
