@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" remoteFilesAllowedToDisappearOnAutoupload="false">
+    <serverData>
+      <paths name="root@199.204.82.71:42052 agent">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/tmp/pycharm_project_383" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="root@199.204.82.71:42052 agent (2)">
+        <serverdata>
+          <mappings>
+            <mapping local="" />
+            <mapping />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="root@199.204.82.71:42052 agent (3)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/project_vae" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="root@199.204.82.71:42052 agent (4)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/project_vae" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="root@96.2.149.232:40218 agent">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/tmp/torch-vmf-vae" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>

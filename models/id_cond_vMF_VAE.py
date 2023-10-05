@@ -22,59 +22,59 @@ class conditionalVAE(torch.nn.Module):
         # emo encoder layers: 3 conv + 2 fc
         self.cov_en0_emo = nn.Conv2d(
             in_channels=1, 
-            out_channels=16, 
+            out_channels=8, 
             kernel_size=(3, 3), 
-            stride=2, 
-            padding=1)
+            padding="same")
         self.pool_0_emo = nn.MaxPool2d(kernel_size=2)
         self.cov_en1_emo = nn.Conv2d(
-            in_channels=16, 
-            out_channels=64, 
-            kernel_size=(5, 5), 
+            in_channels=8, 
+            out_channels=16, 
+            kernel_size=(3, 3), 
             padding="same")
         self.pool_1_emo = nn.MaxPool2d(kernel_size=2)
-        # self.cov_en2 = nn.Conv2d(
-        #     in_channels=32, 
-        #     out_channels=32, 
-        #     kernel_size=(5, 5), 
-        #     padding="same")
+        self.cov_en2_emo = nn.Conv2d(
+            in_channels=16, 
+            out_channels=32, 
+            kernel_size=(5, 5), 
+            padding="same")
+        self.pool_2_emo = nn.MaxPool2d(kernel_size=2)
 
-        self.fc_en3_emo = nn.Linear(64*int(size[0]/8)*int(size[1]/8), 128)
+        self.fc_en3_emo = nn.Linear(32*int(size[0]/8)*int(size[1]/8), 16)
 
         if self.distribution_emo == 'normal':
             # compute mean and std of the normal distribution
-            self.fc_mean_emo = nn.Linear(128, z_dim_emo)
-            self.fc_var_emo =  nn.Linear(128, z_dim_emo)
+            self.fc_mean_emo = nn.Linear(16, z_dim_emo)
+            self.fc_var_emo =  nn.Linear(16, z_dim_emo)
         elif self.distribution_emo == 'vmf':
             # compute mean and concentration of the von Mises-Fisher
-            self.fc_mean_emo = nn.Linear(128, z_dim_emo)
-            self.fc_var_emo = nn.Linear(128, 1)
+            self.fc_mean_emo = nn.Linear(16, z_dim_emo)
+            self.fc_var_emo = nn.Linear(16, 1)
         else:
             raise NotImplemented
             
         # decoder layers
-        self.fc_de0 = nn.Linear(1 + z_dim_emo, 128)
+        self.fc_de0 = nn.Linear(1 + z_dim_emo, 16)
 
-        self.fc_de1 = nn.Linear(128, 64*int(size[0]/8)*int(size[1]/8))
+        self.fc_de1 = nn.Linear(16, 32*int(size[0]/8)*int(size[1]/8))
 
         self.Tcov_de2 = nn.ConvTranspose2d(
-        	in_channels=64, 
-        	out_channels=32, 
+        	in_channels=32, 
+        	out_channels=16, 
         	kernel_size=(5, 5), 
         	stride=2, 
         	padding=2, 
             output_padding=1
         	)
         self.Tcov_de3 = nn.ConvTranspose2d(
-            in_channels=32, 
-            out_channels=16, 
+            in_channels=16, 
+            out_channels=8, 
             kernel_size=(3, 3), 
             stride=2, 
             padding=1, 
             output_padding=1
             )
         self.Tcov_de4 = nn.ConvTranspose2d(
-        	in_channels=16, 
+        	in_channels=8, 
         	out_channels=1, 
         	kernel_size=(3, 3), 
         	stride=2, 
@@ -83,6 +83,7 @@ class conditionalVAE(torch.nn.Module):
         	)
 
         # classifier_emo
+        self.dropout = nn.Dropout(0.7)
         self.linear_emo = nn.Linear(z_dim_emo, 7)
         self.softmax_class_emo = nn.Softmax(dim=1)
 
@@ -90,10 +91,11 @@ class conditionalVAE(torch.nn.Module):
         # 2 hidden layers encoder
         x = self.pool_0_emo(F.relu(self.cov_en0_emo(x)))
         x = self.pool_1_emo(F.relu(self.cov_en1_emo(x)))
-        # x = F.relu(self.cov_en2(x))
-        x = x.view(-1, 64*int(self.size[0]/8)*int(self.size[1]/8))
-        # x = self.dropout(x)
+        x = self.pool_2_emo(F.relu(self.cov_en2_emo(x)))
+        x = x.view(-1, 32*int(self.size[0]/8)*int(self.size[1]/8))
+        x = self.dropout(x)
         x = self.fc_en3_emo(x)  # dropout should be placed after activation
+        x = self.dropout(x)
         
         if self.distribution_emo == 'normal':
             # compute mean and std of the normal distribution
@@ -121,7 +123,7 @@ class conditionalVAE(torch.nn.Module):
         
         x = F.relu(self.fc_de0(torch.cat((x_id[:, None], z), 1)))
         x = F.relu(self.fc_de1(x))
-        x = x.view(-1, 64, int(self.size[0]/8), int(self.size[1]/8))  
+        x = x.view(-1, 32, int(self.size[0]/8), int(self.size[1]/8))  
         # dimensionality transform: batch, channel, size...
         x = F.relu(self.Tcov_de2(x))
         x = F.relu(self.Tcov_de3(x))
@@ -142,15 +144,17 @@ class conditionalVAE(torch.nn.Module):
 
         return q_z, p_z
         
-    def forward(self, x, x_id): 
+    def forward(self, x_id, x): 
         z_mean_emo, z_var_emo = self.encoder_emo(x)
         q_z_emo, p_z_emo = self.reparameterize(self.distribution_emo, z_mean_emo, z_var_emo, self.z_dim_emo, self.radius)
         # z_id = q_z_id.rsample()  # sampling using reparameterization trick
         z_emo = q_z_emo.rsample()
 
         x_rec = self.decoder(x_id, z_emo)
-        x_cla_emo = self.classifier_emo(z_emo)
+        x_cla_emo = self.classifier_emo(z_mean_emo)
         
         return (z_mean_emo, z_var_emo), (q_z_emo, p_z_emo), z_emo, (x_rec, x_cla_emo)
+
+    
 
     

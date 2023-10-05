@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from math import pi, atan2, asin, sqrt
+from torchvision.transforms import Resize
 
 
 def setup_seed(seed):
@@ -18,13 +19,12 @@ def latent_space(model, dataloader, config, legend=True):
     """display how the latent space clusters different data points in vMF space"""
 
     model.eval()
-    x = torch.rand((1, model.z_dim_emo))
+    x = torch.rand((1, model.submodel2.z_dim))
     y = torch.rand(1)
 
     for data in dataloader:  # calculate the latent codes
         images = data[0].to(config.device)
-        x_id = data[3].to(config.device)
-        latent_code, _, _, _ = model(images, x_id)
+        latent_code, _, _, _ = model(Resize((40, 40))(images))
 
         x = torch.cat((x, latent_code[0].to("cpu")), 0) 
         y = torch.cat((y, data[-2]), 0) 
@@ -69,17 +69,18 @@ def latent_space(model, dataloader, config, legend=True):
     print("Number of data:", len(x))
 
     ax.set_aspect('equal')
+    plt.tight_layout()
     plt.show()
 
 
-def manifold_sphere(model, obj, config, theta=(0,), z_resolution=10):
+def manifold_sphere(model, config, theta=(0,), z_resolution=10):
     """
     theta: the arc between intersecting lines - one is (0, 1) on the x-y plane, ranged in 0-2pi;
     z_resolution: how many pics to be shown in a 1/4 arc
     """
     model.eval()
 
-    if model.z_dim_id == 3 and model.distribution_id == "vmf" and obj == "id":
+    if model.z_dim == 3 and model.distribution == "vmf":
         fig, ax = plt.subplots(len(theta), z_resolution)
         plt.setp(ax.flat, xticks=[], yticks=[])
 
@@ -92,8 +93,6 @@ def manifold_sphere(model, obj, config, theta=(0,), z_resolution=10):
                 sample = torch.tensor([[np.sin(arc)*np.cos(phi), np.cos(arc)*np.cos(phi), np.sin(phi)]]) * config.radius
                 grid = torch.cat((grid, sample), 0)
 
-            padding = torch.zeros_like(grid)
-            grid = torch.cat((grid, padding), 1)
 
             grid = grid[1:, :].type("torch.FloatTensor").to(config.device)
             img = model.decoder(grid)
@@ -104,56 +103,8 @@ def manifold_sphere(model, obj, config, theta=(0,), z_resolution=10):
 
         fig.subplots_adjust(wspace=0, hspace=0, bottom=0.15, right=0.88)
 
-    elif model.z_dim_emo == 3 and model.distribution_emo == "vmf" and obj == "emo":
-        fig, ax = plt.subplots(len(theta), z_resolution)
-        plt.setp(ax.flat, xticks=[], yticks=[])
 
-        for j, arc in enumerate(theta):
-            grid = torch.tensor([[0, 0, 0]])
-
-            for i in range(z_resolution):
-
-                phi = pi*(-0.5) + (i+1)*pi/z_resolution
-                sample = torch.tensor([[np.sin(arc)*np.cos(phi), np.cos(arc)*np.cos(phi), np.sin(phi)]]) * config.radius
-                grid = torch.cat((grid, sample), 0)
-
-            padding = torch.zeros_like(grid)
-            grid = torch.cat((padding, grid), 1)
-
-            grid = grid[1:, :].type("torch.FloatTensor").to(config.device)
-            img = model.decoder(grid)
-            img = img.cpu().detach().numpy()
-
-            for i in range(z_resolution):
-                ax[j][i].imshow(img[i, 0, :, :],cmap='gray')
-
-        fig.subplots_adjust(wspace=0, hspace=0, bottom=0.15, right=0.88)
-
-    elif model.z_dim_emo == 3 and model.z_dim_id == 3 and model.distribution_emo == "vmf" and model.distribution_id == "vmf" and obj == "both":
-        fig, ax = plt.subplots(len(theta), z_resolution)
-        plt.setp(ax.flat, xticks=[], yticks=[])
-
-        for j, arc in enumerate(theta):
-            grid = torch.tensor([[0, 0, 0]])
-
-            for i in range(z_resolution):
-
-                phi = pi*(-0.5) + (i+1)*pi/z_resolution
-                sample = torch.tensor([[np.sin(arc)*np.cos(phi), np.cos(arc)*np.cos(phi), np.sin(phi)]]) * config.radius
-                grid = torch.cat((grid, sample), 0)
-
-            grid = torch.cat((grid, grid), 1)
-
-            grid = grid[1:, :].type("torch.FloatTensor").to(config.device)
-            img = model.decoder(grid)
-            img = img.cpu().detach().numpy()
-
-            for i in range(z_resolution):
-                ax[j][i].imshow(img[i, 0, :, :],cmap='gray')
-
-        fig.subplots_adjust(wspace=0, hspace=0, bottom=0.15, right=0.88)
-
-    elif model.z_dim == 2:
+    elif model.z_dim_emo == 2:
         fig, ax = plt.subplots(1, len(theta))
         plt.setp(ax.flat, xticks=[], yticks=[])
 
@@ -174,8 +125,10 @@ def manifold_sphere(model, obj, config, theta=(0,), z_resolution=10):
     else: 
         raise NotImplemented
 
+    plt.tight_layout()
     plt.show()
-
+    
+    
 def conditional_manifold(model, obj, condition, config, theta=(0,), z_resolution=10):
     """
     theta: the arc between intersecting lines - one is (0, 1) on the x-y plane, ranged in 0-2pi;
@@ -291,9 +244,8 @@ def reconstruction(model, dataloader, n_show, config):
                     images = data[1].to(config.device)
             elif not config.aug:
                 images = data[0].to(config.device)
-                x_id = data[3].to(config.device)
 
-            _, _, _, (img_rec, _) = model(images, x_id)
+            _, _, _, (img_rec, _) = model(images)
 
             f, a = plt.subplots(2, n_show)
             plt.setp(a.flat, xticks=[], yticks=[])
@@ -478,6 +430,45 @@ def collapse_test(model, dataloader, config):
     distance_between_emo = pairwise_mean_distance(ave_position_emo[1:, :])
 
     return distance_between_emo / distance_within_emo
+
+def accuracy(model, dataloader, config):
+    model.eval()
+    positive_pred = 0
+    amount = 0
+
+    for data in dataloader: 
+        base_images, base_images_id, labels, labels_id = data
+        
+        base_images, labels= base_images.to(config.device), labels.to(config.device)
+        # base_images_id, labels_id= base_images_id.to(config.device), labels_id.to(config.device)
+        
+        _, _, _, (_, labels_emo_) = model(base_images)
+        positive_pred += torch.sum(torch.argmax(labels_emo_, dim=1, keepdim=False) == labels)
+        amount += len(labels)
+    
+    accuracy = positive_pred.cpu().numpy() / amount
+    
+    return accuracy
+
+def accuracy_res(model, dataloader, config):
+    model.eval()
+    positive_pred = 0
+    amount = 0
+
+    for data in dataloader: 
+        base_images, base_images_id, labels, labels_id = data
+        
+        base_images, labels= base_images.to(config.device), labels.to(config.device)
+        # base_images_id, labels_id= base_images_id.to(config.device), labels_id.to(config.device)
+        
+        _, _, _, (_, labels_emo_) = model(Resize((40, 40))(base_images))
+        positive_pred += torch.sum(torch.argmax(labels_emo_, dim=1, keepdim=False) == labels)
+        amount += len(labels)
+    
+    accuracy = positive_pred.cpu().numpy() / amount
+    
+    return accuracy
+        
 
 
 
