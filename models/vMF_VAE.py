@@ -30,7 +30,7 @@ class VAE(torch.nn.Module):
             
         # decoder layers
         self.fc_de0 = nn.Linear(z_dim, 64)
-        self.fc_de1 = nn.Linear(64, 32*int(64/8)*int(40/8))
+        self.fc_de1 = nn.Linear(64, 32*int(40/8)*int(40/8))
 
         self.Tcov_de2 = nn.ConvTranspose2d(
         	in_channels=32, 
@@ -91,7 +91,7 @@ class VAE(torch.nn.Module):
         
         x = F.relu(self.fc_de0(z))
         x = F.relu(self.fc_de1(x))
-        x = x.view(-1, 32, int(64/8), int(40/8))
+        x = x.view(-1, 32, int(40/8), int(40/8))
         # dimensionality transform: batch, channel, size...
         x = F.relu(self.Tcov_de2(x))
         x = F.relu(self.Tcov_de3(x))

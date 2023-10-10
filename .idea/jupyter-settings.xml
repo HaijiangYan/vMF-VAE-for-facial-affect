@@ -1,13 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="JupyterPersistentConnectionParameters">
+    <option name="knownRemoteServers">
+      <list>
+        <JupyterConnectionParameters>
+          <option name="authType" value="notebook" />
+          <option name="urlString" value="https://96.2.149.232:40189" />
+          <authParams2>
+            <map />
+          </authParams2>
+        </JupyterConnectionParameters>
+      </list>
+    </option>
     <option name="moduleParameters">
       <map>
         <entry key="$PROJECT_DIR$/.idea/torch-vmf-vae.iml">
           <value>
             <JupyterConnectionParameters>
-              <option name="managed" value="true" />
-              <option name="port" value="42055" />
+              <option name="authType" value="notebook" />
+              <option name="urlString" value="https://96.2.149.232:40189" />
+              <authParams2>
+                <map />
+              </authParams2>
             </JupyterConnectionParameters>
           </value>
         </entry>

@@ -41,10 +41,11 @@ def latent_space(model, dataloader, config, legend=True):
             x_, y_, z_ = x[np.where(y == int(key)), 0], x[np.where(y == int(key)), 1], x[np.where(y == int(key)), 2]
             ax.scatter(x_, y_, z_, label=value)
 
-            x__, y__ = [asin(i) for i in z_[0]], [sqrt(1-i[2]*i[2]) * atan2(i[0], i[1]) 
-            for i in x[np.where(y == int(key)), :][0]]
-            ax2.scatter(y__, x__, label=value)
-            ax2.set_aspect('equal')
+            if config.distribution_emo == "vmf":
+                x__, y__ = [asin(i) for i in z_[0]], [sqrt(1-i[2]*i[2]) * atan2(i[0], i[1])
+                for i in x[np.where(y == int(key)), :][0]]
+                ax2.scatter(y__, x__, label=value)
+                ax2.set_aspect('equal')
 
         # plt.title("Data Points in Latent Space")
         if legend == True:
@@ -73,7 +74,7 @@ def latent_space(model, dataloader, config, legend=True):
     plt.show()
 
 
-def manifold_sphere(model, config, theta=(0,), z_resolution=10):
+def manifold_sphere(model, config, theta=(0,), z_resolution=10, z=0):
     """
     theta: the arc between intersecting lines - one is (0, 1) on the x-y plane, ranged in 0-2pi;
     z_resolution: how many pics to be shown in a 1/4 arc
@@ -103,24 +104,33 @@ def manifold_sphere(model, config, theta=(0,), z_resolution=10):
 
         fig.subplots_adjust(wspace=0, hspace=0, bottom=0.15, right=0.88)
 
-
-    elif model.z_dim_emo == 2:
-        fig, ax = plt.subplots(1, len(theta))
+    if model.z_dim == 3 and model.distribution == "normal":
+        fig, ax = plt.subplots(z_resolution, z_resolution)
         plt.setp(ax.flat, xticks=[], yticks=[])
 
-        grid = torch.tensor([[0, 0]])
+        for i in range(z_resolution):
+            for j in range(z_resolution):
+                p = torch.tensor([[-3 + 6*j / z_resolution, 3 - 6*i / z_resolution, z]]).type("torch.FloatTensor").to(config.device)
+                sample = model.decoder(p)
+                sample = sample.cpu().detach().numpy()
+                ax[j][i].imshow(sample[0, 0, :, :],cmap='gray')
 
-        for arc in theta:
+        fig.subplots_adjust(wspace=0, hspace=0, bottom=0.15, right=0.88)
 
-            sample = torch.tensor([[np.sin(arc), np.cos(arc)]]) * config.radius
-            grid = torch.cat((grid, sample), 0)
 
-        grid = grid[1:, :].type("torch.FloatTensor").to(config.device)
-        img = model.decoder(grid)
-        img = img.cpu().detach().numpy()
+    elif model.z_dim == 2:
+        fig, ax = plt.subplots(z_resolution, z_resolution)
+        plt.setp(ax.flat, xticks=[], yticks=[])
 
-        for i in range(len(theta)):
-            ax[i].imshow(img[i, 0, :, :],cmap='gray')
+        for i in range(z_resolution):
+            for j in range(z_resolution):
+                p = torch.tensor([[-3 + 6 * j / z_resolution, 3 - 6 * i / z_resolution]]).type(
+                    "torch.FloatTensor").to(config.device)
+                sample = model.decoder(p)
+                sample = sample.cpu().detach().numpy()
+                ax[j][i].imshow(sample[0, 0, :, :], cmap='gray')
+
+        fig.subplots_adjust(wspace=0, hspace=0, bottom=0.15, right=0.88)
 
     else: 
         raise NotImplemented
