@@ -2,7 +2,7 @@
 import torch
 from torch.cuda.amp import GradScaler, autocast  # mixed precision
 import torch.nn as nn
-from torchvision.transforms import Resize
+from torchvision.transforms import CenterCrop
 from tqdm import tqdm
 import numpy as np
 
@@ -40,7 +40,7 @@ def train(model, train_loader, optimizer, scaler, config):
 				(embeddings, _), (q_z_emo, p_z_emo), _, (images_, labels_) = model(labels_id, aug_images)  
 
 			elif not config.aug:
-				(embeddings_emo, _), (q_z_emo, p_z_emo), _, (images_, labels_emo_) = model(Resize((40, 40))(base_images))
+				(embeddings_emo, _), (q_z_emo, p_z_emo), _, (images_, labels_emo_) = model(CenterCrop((48, 40))(base_images))
 			# output of encoder (prior and posterior distribution) and decoder
 
 			loss_recon = config.loss(reduction='none')(images_, base_images * 255).sum(-1).mean()
@@ -54,7 +54,8 @@ def train(model, train_loader, optimizer, scaler, config):
 			else:
 				raise NotImplemented
 
-			loss = loss_recon * config.weight_recon + loss_KL_emo + loss_cla_emo * config.weight_class_emo
+			# loss = loss_recon * config.weight_recon + loss_KL_emo + loss_cla_emo * config.weight_class_emo
+			loss = loss_recon * config.weight_recon + loss_cla_emo * config.weight_class_emo
 
 		scaler.scale(loss).backward()
 		scaler.step(optimizer)

@@ -90,11 +90,14 @@ def get_dataloaders(path='data/fer2013/fer2013.csv', desired_data='all', bs=64, 
 
     test_transform = transforms.Compose([
         transforms.Grayscale(),
-        transforms.FiveCrop(40),
-        transforms.Lambda(lambda crops: torch.stack(
-            [transforms.ToTensor()(crop) for crop in crops])),
-        transforms.Lambda(lambda tensors: torch.stack(
-            [transforms.Normalize(mean=(mu,), std=(st,))(t) for t in tensors])),
+        # transforms.FiveCrop(40),
+        # transforms.Lambda(lambda crops: torch.stack(
+        #     [transforms.ToTensor()(crop) for crop in crops])),
+        # transforms.Lambda(lambda tensors: torch.stack(
+        #     [transforms.Normalize(mean=(mu,), std=(st,))(t) for t in tensors])),
+        # transforms.Resize((40,40)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=(0,), std=(255,)), 
     ])
     if augment:
         train_transform = transforms.Compose([

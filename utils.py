@@ -4,7 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from math import pi, atan2, asin, sqrt
-from torchvision.transforms import Resize
+from torchvision.transforms import CenterCrop
+import random
 
 
 def setup_seed(seed):
@@ -24,7 +25,7 @@ def latent_space(model, dataloader, config, legend=True):
 
     for data in dataloader:  # calculate the latent codes
         images = data[0].to(config.device)
-        latent_code, _, _, _ = model(Resize((40, 40))(images))
+        latent_code, _, _, _ = model(CenterCrop((48, 40))(images))
 
         x = torch.cat((x, latent_code[0].to("cpu")), 0) 
         y = torch.cat((y, data[-2]), 0) 
@@ -35,8 +36,8 @@ def latent_space(model, dataloader, config, legend=True):
     if x.shape[1] == 3:
         fig = plt.figure(figsize=(10, 15))
 
-        ax = fig.add_subplot(211, projection='3d')
-        ax2 = fig.add_subplot(212)
+        ax = fig.add_subplot(111, projection='3d')
+        # ax2 = fig.add_subplot(212)
         for key, value in config.label_list.items():
             x_, y_, z_ = x[np.where(y == int(key)), 0], x[np.where(y == int(key)), 1], x[np.where(y == int(key)), 2]
             ax.scatter(x_, y_, z_, label=value)
@@ -51,14 +52,14 @@ def latent_space(model, dataloader, config, legend=True):
         if legend == True:
             ax.legend(fontsize=12)
         # plt.savefig('./figure/save.jpg')
-        ax.set_xlim(-1 * config.radius, config.radius)
-        ax.set_ylim(-1 * config.radius, config.radius)
+        # ax.set_xlim(-1 * config.radius, config.radius)
+        # ax.set_ylim(-1 * config.radius, config.radius)
 
-        ax.set_xlabel("X", fontsize=12)
-        ax.set_ylabel("Y", fontsize=12)
+        # ax.set_xlabel("X", fontsize=12)
+        # ax.set_ylabel("Y", fontsize=12)
 
-        ax.set_zlim(-1 * config.radius, config.radius)
-        ax.set_zlabel("Z", fontsize=12)
+        # ax.set_zlim(-1 * config.radius, config.radius)
+        # ax.set_zlabel("Z", fontsize=12)
         # ax.tick_params(axis='both', which='major', labelsize=15)
 
     elif x.shape[1] == 2:
@@ -305,7 +306,7 @@ class EarlyStopping:
             self.save_all(measure, model)
         elif score <= self.best_score + self.delta:
             self.counter += 1
-            self.trace_func(f'EarlyStopping counter: {self.counter} out of {self.patience}')
+            # self.trace_func(f'EarlyStopping counter: {self.counter} out of {self.patience}')
             if self.counter >= self.patience:
                 self.early_stop = True
         else:
@@ -441,13 +442,33 @@ def collapse_test(model, dataloader, config):
 
     return distance_between_emo / distance_within_emo
 
-def accuracy(model, dataloader, config):
+def accuracy_cafe(model, dataloader, config):
     model.eval()
     positive_pred = 0
     amount = 0
 
     for data in dataloader: 
         base_images, base_images_id, labels, labels_id = data
+        
+        base_images, labels= base_images.to(config.device), labels.to(config.device)
+        # base_images_id, labels_id= base_images_id.to(config.device), labels_id.to(config.device)
+        
+        _, _, _, (_, labels_emo_) = model(CenterCrop((48, 40))(base_images))
+        positive_pred += torch.sum(torch.argmax(labels_emo_, dim=1, keepdim=False) == labels)
+        amount += len(labels)
+    
+    accuracy = positive_pred.cpu().numpy() / amount
+    
+    return accuracy
+
+
+def accuracy_fer(model, dataloader, config):
+    model.eval()
+    positive_pred = 0
+    amount = 0
+
+    for data in dataloader: 
+        base_images, labels = data
         
         base_images, labels= base_images.to(config.device), labels.to(config.device)
         # base_images_id, labels_id= base_images_id.to(config.device), labels_id.to(config.device)
@@ -460,18 +481,19 @@ def accuracy(model, dataloader, config):
     
     return accuracy
 
+
 def accuracy_res(model, dataloader, config):
     model.eval()
     positive_pred = 0
     amount = 0
 
     for data in dataloader: 
-        base_images, base_images_id, labels, labels_id = data
+        base_images, labels = data
         
         base_images, labels= base_images.to(config.device), labels.to(config.device)
         # base_images_id, labels_id= base_images_id.to(config.device), labels_id.to(config.device)
         
-        _, _, _, (_, labels_emo_) = model(Resize((40, 40))(base_images))
+        labels_emo_, _ = model(base_images)
         positive_pred += torch.sum(torch.argmax(labels_emo_, dim=1, keepdim=False) == labels)
         amount += len(labels)
     
